@@ -184,7 +184,7 @@ export default function DesktopDashboard({ transactions, wallets, totalBalance }
                    <div className="flex justify-between items-start">
                      <p className="text-sm font-medium text-slate-800 truncate">{tx.category}</p>
                      <p className={cn("text-sm font-bold whitespace-nowrap", tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500')}>
-                       {tx.amount.toLocaleString('vi-VN')} đ
+                       {formatCurrency(tx.amount || 0)}
                      </p>
                    </div>
                    <div className="flex justify-between items-center mt-1">

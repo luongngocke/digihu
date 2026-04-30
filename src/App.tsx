@@ -19,52 +19,74 @@ import ProfileModal from './components/ProfileModal';
 
 export default function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [savedPin, setSavedPin] = useState('');
-  const [userName, setUserName] = useState('Người dùng');
-  const [avatar, setAvatar] = useState('');
+  const [savedPin, setSavedPin] = useState(() => localStorage.getItem('app_savedPin') || '');
+  const [userName, setUserName] = useState(() => localStorage.getItem('app_userName') || 'Người dùng');
+  const [avatar, setAvatar] = useState(() => localStorage.getItem('app_avatar') || '');
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
-  const [wallets, setWallets] = useState<Wallet[]>([]);
-  const [transactions, setTransactions] = useState<Transaction[]>([]);
-  const [debts, setDebts] = useState<Debt[]>([]);
+  const [wallets, setWallets] = useState<Wallet[]>(() => {
+    try { const cached = localStorage.getItem('app_wallets'); return cached ? JSON.parse(cached) : []; } catch { return []; }
+  });
+  const [transactions, setTransactions] = useState<Transaction[]>(() => {
+    try {
+      const cached = localStorage.getItem('app_transactions');
+      if (cached) return JSON.parse(cached).map((t: any) => ({ ...t, date: new Date(t.date) }));
+      return [];
+    } catch { return []; }
+  });
+  const [debts, setDebts] = useState<Debt[]>(() => {
+    try {
+      const cached = localStorage.getItem('app_debts');
+      if (cached) return JSON.parse(cached).map((d: any) => ({ ...d, date: new Date(d.date) }));
+      return [];
+    } catch { return []; }
+  });
   
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isDebtModalOpen, setIsDebtModalOpen] = useState(false);
   const [currentView, setCurrentView] = useState<SidebarView>('dashboard');
   
-  const [isLoading, setIsLoading] = useState(true);
+  const hasCachedData = wallets.length > 0 || transactions.length > 0 || debts.length > 0;
+  const [isLoading, setIsLoading] = useState(!hasCachedData);
   const [isDataLoaded, setIsDataLoaded] = useState(false);
 
   useEffect(() => {
     if (isDataLoaded) return;
     async function fetchData() {
-      setIsLoading(true);
+      if (!hasCachedData) setIsLoading(true);
       try {
         const data = await api.getData();
-        if (data.pin !== undefined) setSavedPin(data.pin);
-        if (data.userName) setUserName(data.userName);
-        if (data.avatar) setAvatar(data.avatar);
+        if (data.pin !== undefined) { setSavedPin(data.pin); localStorage.setItem('app_savedPin', data.pin); }
+        if (data.userName) { setUserName(data.userName); localStorage.setItem('app_userName', data.userName); }
+        if (data.avatar) { setAvatar(data.avatar); localStorage.setItem('app_avatar', data.avatar); }
+        
         if (data.wallets) {
-          setWallets(data.wallets.map((w: any) => ({
+          const parsedWallets = data.wallets.map((w: any) => ({
             ...w,
             balance: Number(w.balance),
             isDefault: w.isDefault === true || w.isDefault === 'TRUE'
-          })));
+          }));
+          setWallets(parsedWallets);
+          localStorage.setItem('app_wallets', JSON.stringify(parsedWallets));
         }
         if (data.transactions) {
-          setTransactions(data.transactions.map((t: any) => ({
+          const parsedTransactions = data.transactions.map((t: any) => ({
              ...t,
              amount: Number(t.amount),
              date: new Date(t.date),
-          })).sort((a: Transaction, b: Transaction) => b.date.getTime() - a.date.getTime()));
+          })).sort((a: Transaction, b: Transaction) => b.date.getTime() - a.date.getTime());
+          setTransactions(parsedTransactions);
+          localStorage.setItem('app_transactions', JSON.stringify(parsedTransactions));
         }
         if (data.debts) {
-          setDebts(data.debts.map((d: any) => ({
+          const parsedDebts = data.debts.map((d: any) => ({
             ...d,
             amount: Number(d.amount),
             date: new Date(d.date)
-          })).sort((a: Debt, b: Debt) => b.date.getTime() - a.date.getTime()));
+          })).sort((a: Debt, b: Debt) => b.date.getTime() - a.date.getTime());
+          setDebts(parsedDebts);
+          localStorage.setItem('app_debts', JSON.stringify(parsedDebts));
         }
       } catch (error) {
         console.error("Failed to load data", error);
@@ -74,7 +96,19 @@ export default function App() {
       }
     }
     fetchData();
-  }, [isDataLoaded]);
+  }, [isDataLoaded, hasCachedData]);
+
+  useEffect(() => {
+    localStorage.setItem('app_transactions', JSON.stringify(transactions));
+  }, [transactions]);
+
+  useEffect(() => {
+    localStorage.setItem('app_wallets', JSON.stringify(wallets));
+  }, [wallets]);
+
+  useEffect(() => {
+    localStorage.setItem('app_debts', JSON.stringify(debts));
+  }, [debts]);
 
   const totalBalance = wallets.reduce((sum, w) => sum + w.balance, 0);
 
@@ -132,7 +166,7 @@ export default function App() {
     }
   };
 
-  if (isLoading || !isDataLoaded) {
+  if (isLoading && !hasCachedData) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-[#e8f2f9] relative font-sans">
         <Loader2 className="w-10 h-10 animate-spin text-[#007ace]" />
